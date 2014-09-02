@@ -38,6 +38,8 @@ nv.models.multiBarChart = function() {
     , controlWidth = function() { return showControls ? 180 : 0 }
     , transitionDuration = 250
     , controlLabels = {}
+    , cData = ['Stacked','Grouped','Stack_Percent']
+    , yAxisTickFormat = d3.format(',.2f')
     ;
 
   multibar
@@ -52,7 +54,7 @@ nv.models.multiBarChart = function() {
     ;
   yAxis
     .orient((rightAlignYAxis) ? 'right' : 'left')
-    .tickFormat(d3.format(',.1f'))
+    .tickFormat(yAxisTickFormat)
     ;
 
   controls.updateState(false);
@@ -182,17 +184,52 @@ nv.models.multiBarChart = function() {
       //------------------------------------------------------------
       // Controls
 
-      if (showControls) {
+ if (showControls) {
         var controlsData = [
-          { key: controlLabels.grouped || 'Grouped', disabled: multibar.stacked() },
-          { key: controlLabels.stacked || 'Stacked', disabled: !multibar.stacked() }
+          {
+            key: controlLabels.stacked || 'Stacked',
+            metaKey: 'Stacked',
+            disabled: multibar.style() != 'stack',
+            style: 'stack'
+          },
+          {
+            key: controlLabels.grouped || 'Grouped',
+            metaKey: 'Grouped',
+            disabled: multibar.style() != 'grouped',
+            style: 'grouped'
+          },
+          {
+            key: controlLabels.stack_percent || 'Stack %',
+            metaKey: 'Stack_Percent',
+            disabled: multibar.style() != 'stack_percent',
+            style: 'stack_percent'
+          }
         ];
 
-        controls.width(controlWidth()).color(['#444', '#444', '#444']);
+        controlWidth = (cData.length/3) * 260;
+
+        controlsData = controlsData.filter(function(d) {
+          return cData.indexOf(d.metaKey) !== -1;
+        })
+
+        controls
+          .width( controlWidth )
+          .color(['#444', '#444', '#444']);
+
         g.select('.nv-controlsWrap')
             .datum(controlsData)
-            .attr('transform', 'translate(0,' + (-margin.top) +')')
             .call(controls);
+
+
+        if ( margin.top != Math.max(controls.height(), legend.height()) ) {
+          margin.top = Math.max(controls.height(), legend.height());
+          availableHeight = (height || parseInt(container.style('height')) || 400)
+                             - margin.top - margin.bottom;
+        }
+
+
+        g.select('.nv-controlsWrap')
+            .attr('transform', 'translate(0,' + (-margin.top) +')');
       }
 
       //------------------------------------------------------------
@@ -284,14 +321,17 @@ nv.models.multiBarChart = function() {
       }
 
 
-      if (showYAxis) {      
-          yAxis
-            .scale(y)
-            .ticks( availableHeight / 36 )
-            .tickSize( -availableWidth, 0);
+      if (showYAxis) {
+        yAxis
+          .scale(y)
+          .ticks(multibar.offset() == 'wiggle' ? 0 : availableHeight / 36)
+          .tickSize(-availableWidth, 0)
+          .setTickFormat( (multibar.style() == 'expand' || multibar.style() == 'stack_percent')
+                ? d3.format('%') :yAxisTickFormat);
 
-          g.select('.nv-y.nv-axis').transition()
-              .call(yAxis);
+        g.select('.nv-y.nv-axis')
+          .transition().duration(0)
+            .call(yAxis);
       }
 
 
@@ -309,28 +349,29 @@ nv.models.multiBarChart = function() {
         chart.update();
       });
 
-      controls.dispatch.on('legendClick', function(d,i) {
+     controls.dispatch.on('legendClick', function(d,i) {
         if (!d.disabled) return;
+
         controlsData = controlsData.map(function(s) {
           s.disabled = true;
           return s;
         });
         d.disabled = false;
 
-        switch (d.key) {
-          case 'Grouped':
-            multibar.stacked(false);
-            break;
-          case 'Stacked':
-            multibar.stacked(true);
-            break;
-        }
+        multibar.style(d.style);
+        multibar.stacked(d.style !== 'grouped')
 
         state.stacked = multibar.stacked();
+        state.style = multibar.style();
         dispatch.stateChange(state);
 
         chart.update();
       });
+
+      dispatch.on('tooltipShow', function(e) {
+        if (tooltips) showTooltip(e, that.parentNode)
+      });
+
 
       dispatch.on('tooltipShow', function(e) {
         if (tooltips) showTooltip(e, that.parentNode)
@@ -523,6 +564,14 @@ nv.models.multiBarChart = function() {
     if (typeof _ !== 'object') return controlLabels;
     controlLabels = _;
     return chart;
+  };
+  
+  yAxis.setTickFormat = yAxis.tickFormat;
+
+  yAxis.tickFormat = function(_) {
+    if (!arguments.length) return yAxisTickFormat;
+    yAxisTickFormat = _;
+    return yAxis;
   };
 
   //============================================================

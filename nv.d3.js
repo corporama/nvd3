@@ -7557,6 +7557,9 @@ nv.models.multiBar = function() {
     , yRange
     , groupSpacing = 0.1
     , dispatch = d3.dispatch('chartClick', 'elementClick', 'elementDblClick', 'elementMouseover', 'elementMouseout')
+    , style = 'grouped'
+    , offset = 'zero'
+    , order = 'default'    
     ;
 
   //============================================================
@@ -7590,9 +7593,17 @@ nv.models.multiBar = function() {
 
       if (stacked)
         data = d3.layout.stack()
-                 .offset(stackOffset)
+                 .order(order)
+                 .offset(offset)
                  .values(function(d){ return d.values })
                  .y(getY)
+                 .out(function(d, y0, y) {
+                    var yHeight = (getY(d) === 0) ? 0 : y;
+                    y = d.y;
+                    d.y0 = y0;
+                    d.y1 = yHeight + y0;
+                    d.yy = yHeight;
+                })
                  (!data.length && hideable ? hideable : data);
 
 
@@ -7606,22 +7617,22 @@ nv.models.multiBar = function() {
 
       //------------------------------------------------------------
       // HACK for negative value stacking
-      if (stacked)
-        data[0].values.map(function(d,i) {
-          var posBase = 0, negBase = 0;
-          data.map(function(d) {
-            var f = d.values[i]
-            f.size = Math.abs(f.y);
-            if (f.y<0)  {
-              f.y1 = negBase;
-              negBase = negBase - f.size;
-            } else
-            {
-              f.y1 = f.size + posBase;
-              posBase = posBase + f.size;
-            }
-          });
-        });
+      // if (stacked)
+      //   data[0].values.map(function(d,i) {
+      //     var posBase = 0, negBase = 0;
+      //     data.map(function(d) {
+      //       var f = d.values[i]
+      //       f.size = Math.abs(f.y);
+      //       if (f.y<0)  {
+      //         f.y1 = negBase;
+      //         negBase = negBase - f.size;
+      //       } else
+      //       {
+      //         f.y1 = f.size + posBase;
+      //         posBase = posBase + f.size;
+      //       }
+      //     });
+      //   });
 
       //------------------------------------------------------------
       // Setup Scales
@@ -7630,7 +7641,7 @@ nv.models.multiBar = function() {
       var seriesData = (xDomain && yDomain) ? [] : // if we know xDomain and yDomain, no need to calculate
             data.map(function(d) {
               return d.values.map(function(d,i) {
-                return { x: getX(d,i), y: getY(d,i), y0: d.y0, y1: d.y1 }
+                return { x: getX(d,i), y: (stacked ? d.yy : getY(d,i)), y0: d.y0, y1: d.y1 }
               })
             });
 
@@ -7734,10 +7745,10 @@ nv.models.multiBar = function() {
           .on('mouseover', function(d,i) { //TODO: figure out why j works above, but not here
             d3.select(this).classed('hover', true);
             dispatch.elementMouseover({
-              value: getY(d,i),
+              value: (stacked ? d.yy : getY(d,i)),
               point: d,
               series: data[d.series],
-              pos: [x(getX(d,i)) + (x.rangeBand() * (stacked ? data.length / 2 : d.series + .5) / data.length), y(getY(d,i) + (stacked ? d.y0 : 0))],  // TODO: Figure out why the value appears to be shifted
+              pos: [x(getX(d,i)) + (x.rangeBand() * (stacked ? data.length / 2 : d.series + .5) / data.length), y((stacked ? d.yy : getY(d,i)) + (stacked ? d.y0 : 0))],  // TODO: Figure out why the value appears to be shifted
               pointIndex: i,
               seriesIndex: d.series,
               e: d3.event
@@ -7746,7 +7757,7 @@ nv.models.multiBar = function() {
           .on('mouseout', function(d,i) {
             d3.select(this).classed('hover', false);
             dispatch.elementMouseout({
-              value: getY(d,i),
+              value:(stacked ? d.yy : getY(d,i)),
               point: d,
               series: data[d.series],
               pointIndex: i,
@@ -7756,10 +7767,10 @@ nv.models.multiBar = function() {
           })
           .on('click', function(d,i) {
             dispatch.elementClick({
-              value: getY(d,i),
+              value: (stacked ? d.yy : getY(d,i)),
               point: d,
               series: data[d.series],
-              pos: [x(getX(d,i)) + (x.rangeBand() * (stacked ? data.length / 2 : d.series + .5) / data.length), y(getY(d,i) + (stacked ? d.y0 : 0))],  // TODO: Figure out why the value appears to be shifted
+              pos: [x(getX(d,i)) + (x.rangeBand() * (stacked ? data.length / 2 : d.series + .5) / data.length), y((stacked ? d.yy : getY(d,i)) + (stacked ? d.y0 : 0))],  // TODO: Figure out why the value appears to be shifted
               pointIndex: i,
               seriesIndex: d.series,
               e: d3.event
@@ -7768,10 +7779,10 @@ nv.models.multiBar = function() {
           })
           .on('dblclick', function(d,i) {
             dispatch.elementDblClick({
-              value: getY(d,i),
+              value: (stacked ? d.yy : getY(d,i)),
               point: d,
               series: data[d.series],
-              pos: [x(getX(d,i)) + (x.rangeBand() * (stacked ? data.length / 2 : d.series + .5) / data.length), y(getY(d,i) + (stacked ? d.y0 : 0))],  // TODO: Figure out why the value appears to be shifted
+              pos: [x(getX(d,i)) + (x.rangeBand() * (stacked ? data.length / 2 : d.series + .5) / data.length), y((stacked ? d.yy : getY(d,i)) + (stacked ? d.y0 : 0))],  // TODO: Figure out why the value appears to be shifted
               pointIndex: i,
               seriesIndex: d.series,
               e: d3.event
@@ -7802,7 +7813,7 @@ nv.models.multiBar = function() {
               return y((stacked ? d.y1 : 0));
             })
             .attr('height', function(d,i) {
-              return Math.max(Math.abs(y(d.y + (stacked ? d.y0 : 0)) - y((stacked ? d.y0 : 0))),1);
+              return Math.max(Math.abs(y(d.yy + (stacked ? d.y0 : 0)) - y((stacked ? d.y0 : 0))),1);
             })
             .attr('x', function(d,i) {
                   return stacked ? 0 : (d.series * x.rangeBand() / data.length )
@@ -7983,6 +7994,41 @@ nv.models.multiBar = function() {
     return chart;
   };
 
+
+  chart.offset = function(_) {
+    if (!arguments.length) return offset;
+    offset = _;
+    return chart;
+  };
+
+  chart.order = function(_) {
+    if (!arguments.length) return order;
+    order = _;
+    return chart;
+  };
+  //shortcut for offset + order
+  chart.style = function(_) {
+    if (!arguments.length) return style;
+    style = _;
+
+    switch (style) {
+      case 'stack':
+        chart.offset('zero');
+        chart.order('default');
+        break;
+      case 'grouped':
+        chart.offset('zero');
+        chart.order('default');
+        break;
+      case 'stack_percent':
+        chart.offset('expand');
+        chart.order('default');
+        break;
+    }
+
+    return chart;
+  };
+
   //============================================================
 
 
@@ -8028,6 +8074,8 @@ nv.models.multiBarChart = function() {
     , controlWidth = function() { return showControls ? 180 : 0 }
     , transitionDuration = 250
     , controlLabels = {}
+    , cData = ['Stacked','Grouped','Stack_Percent']
+    , yAxisTickFormat = d3.format(',.2f')
     ;
 
   multibar
@@ -8042,7 +8090,7 @@ nv.models.multiBarChart = function() {
     ;
   yAxis
     .orient((rightAlignYAxis) ? 'right' : 'left')
-    .tickFormat(d3.format(',.1f'))
+    .tickFormat(yAxisTickFormat)
     ;
 
   controls.updateState(false);
@@ -8172,17 +8220,52 @@ nv.models.multiBarChart = function() {
       //------------------------------------------------------------
       // Controls
 
-      if (showControls) {
+ if (showControls) {
         var controlsData = [
-          { key: controlLabels.grouped || 'Grouped', disabled: multibar.stacked() },
-          { key: controlLabels.stacked || 'Stacked', disabled: !multibar.stacked() }
+          {
+            key: controlLabels.stacked || 'Stacked',
+            metaKey: 'Stacked',
+            disabled: multibar.style() != 'stack',
+            style: 'stack'
+          },
+          {
+            key: controlLabels.grouped || 'Grouped',
+            metaKey: 'Grouped',
+            disabled: multibar.style() != 'grouped',
+            style: 'grouped'
+          },
+          {
+            key: controlLabels.stack_percent || 'Stack %',
+            metaKey: 'Stack_Percent',
+            disabled: multibar.style() != 'stack_percent',
+            style: 'stack_percent'
+          }
         ];
 
-        controls.width(controlWidth()).color(['#444', '#444', '#444']);
+        controlWidth = (cData.length/3) * 260;
+
+        controlsData = controlsData.filter(function(d) {
+          return cData.indexOf(d.metaKey) !== -1;
+        })
+
+        controls
+          .width( controlWidth )
+          .color(['#444', '#444', '#444']);
+
         g.select('.nv-controlsWrap')
             .datum(controlsData)
-            .attr('transform', 'translate(0,' + (-margin.top) +')')
             .call(controls);
+
+
+        if ( margin.top != Math.max(controls.height(), legend.height()) ) {
+          margin.top = Math.max(controls.height(), legend.height());
+          availableHeight = (height || parseInt(container.style('height')) || 400)
+                             - margin.top - margin.bottom;
+        }
+
+
+        g.select('.nv-controlsWrap')
+            .attr('transform', 'translate(0,' + (-margin.top) +')');
       }
 
       //------------------------------------------------------------
@@ -8274,14 +8357,17 @@ nv.models.multiBarChart = function() {
       }
 
 
-      if (showYAxis) {      
-          yAxis
-            .scale(y)
-            .ticks( availableHeight / 36 )
-            .tickSize( -availableWidth, 0);
+      if (showYAxis) {
+        yAxis
+          .scale(y)
+          .ticks(multibar.offset() == 'wiggle' ? 0 : availableHeight / 36)
+          .tickSize(-availableWidth, 0)
+          .setTickFormat( (multibar.style() == 'expand' || multibar.style() == 'stack_percent')
+                ? d3.format('%') :yAxisTickFormat);
 
-          g.select('.nv-y.nv-axis').transition()
-              .call(yAxis);
+        g.select('.nv-y.nv-axis')
+          .transition().duration(0)
+            .call(yAxis);
       }
 
 
@@ -8299,28 +8385,29 @@ nv.models.multiBarChart = function() {
         chart.update();
       });
 
-      controls.dispatch.on('legendClick', function(d,i) {
+     controls.dispatch.on('legendClick', function(d,i) {
         if (!d.disabled) return;
+
         controlsData = controlsData.map(function(s) {
           s.disabled = true;
           return s;
         });
         d.disabled = false;
 
-        switch (d.key) {
-          case 'Grouped':
-            multibar.stacked(false);
-            break;
-          case 'Stacked':
-            multibar.stacked(true);
-            break;
-        }
+        multibar.style(d.style);
+        multibar.stacked(d.style !== 'grouped')
 
         state.stacked = multibar.stacked();
+        state.style = multibar.style();
         dispatch.stateChange(state);
 
         chart.update();
       });
+
+      dispatch.on('tooltipShow', function(e) {
+        if (tooltips) showTooltip(e, that.parentNode)
+      });
+
 
       dispatch.on('tooltipShow', function(e) {
         if (tooltips) showTooltip(e, that.parentNode)
@@ -8513,6 +8600,14 @@ nv.models.multiBarChart = function() {
     if (typeof _ !== 'object') return controlLabels;
     controlLabels = _;
     return chart;
+  };
+  
+  yAxis.setTickFormat = yAxis.tickFormat;
+
+  yAxis.tickFormat = function(_) {
+    if (!arguments.length) return yAxisTickFormat;
+    yAxisTickFormat = _;
+    return yAxis;
   };
 
   //============================================================
